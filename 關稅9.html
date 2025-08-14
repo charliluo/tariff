@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>半導體關稅衝擊模擬器</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            font-size: 2em;
+        }
+        .instructions {
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+            border-left: 5px solid #007bff;
+        }
+        .instructions h4 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .instructions p, .instructions li {
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+        #sidebar {
+            flex: 0 0 380px;
+        }
+        #main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .dashboard-block {
+            width: 100%;
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        .dashboard-block h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .control-group {
+            margin-bottom: 25px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .control-group span {
+            font-size: 0.9em;
+            color: #007bff;
+            font-weight: bold;
+            float: right;
+        }
+        input[type="number"], input[type="range"] {
+            width: 100%;
+        }
+        .analysis-container {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .analysis-metrics { flex: 1; min-width: 250px; }
+        .analysis-chart { flex: 1.5; min-width: 350px; }
+        .metric { margin-bottom: 25px; }
+        .metric-label { font-size: 1em; color: #555; }
+        .metric-value { font-size: 2.2em; font-weight: bold; color: #000; }
+        .metric-delta { font-size: 1em; font-weight: 500; margin-left: 8px; }
+        .metric-delta.positive { color: #28a745; }
+        .metric-delta.negative { color: #dc3545; }
+        #sweet-spot-alert {
+            padding: 15px; border-radius: 5px; font-weight: bold; text-align: center;
+            height: 100%; display: flex; align-items: center; justify-content: center; line-height: 1.5;
+        }
+        #sweet-spot-alert.good { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;}
+        #sweet-spot-alert.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;}
+        #sweet-spot-alert.danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;}
+        .chart-container { width:100%; height:250px; }
+        footer {
+            margin-top: 30px; text-align: center; font-size: 0.8em; color: #888;
+        }
+        
+        @media (max-width: 960px) {
+            .main-container {
+                flex-direction: column;
+            }
+            #sidebar {
+                flex-basis: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>半導體關稅衝擊模擬器</h1>
+    </header>
+    
+    <div class="main-container">
+        <div id="sidebar">
+            <div class="dashboard-block">
+                <h3>⚙️ 互動參數設定區</h3>
+                 <div class="instructions">
+                    <h4>模型概念與使用方式</h4>
+                    <p>本工具旨在將複雜的<strong>地緣政治風險</strong>（如關稅）量化為具體的<strong>財務指標</strong>（如毛利率衝擊），以輔助投資決策。</p>
+                </div>
+                <div class="control-group">
+                    <label for="asp">1. 產品平均售價 (ASP, 美元)</label>
+                    <input type="number" id="asp" value="20000" step="1000">
+                </div>
+                <div class="control-group">
+                    <label for="initial-margin">2. 台灣廠商原始毛利率<span id="initial-margin-value">55.0%</span></label>
+                    <input type="range" id="initial-margin" min="30" max="70" value="55" step="0.5">
+                </div>
+                <div class="control-group">
+                    <label for="tariff-rate">3. 美國對台關稅稅率<span id="tariff-rate-value">10.0%</span></label>
+                    <input type="range" id="tariff-rate" min="0" max="50" value="10" step="0.5">
+                </div>
+                <div class="control-group">
+                    <label for="pass-through">4. 關稅成本轉嫁比例<span id="pass-through-value">50%</span></label>
+                    <input type="range" id="pass-through" min="0" max="100" value="50" step="5">
+                </div>
+            </div>
+        </div>
+
+        <div id="main-content">
+            <div class="dashboard-block" id="impact-analysis">
+                <h3>🇹🇼 台灣廠商衝擊分析</h3>
+                <div class="analysis-container">
+                    <div class="analysis-metrics">
+                        <div class="metric">
+                            <div class="metric-label">侵蝕後毛利率</div>
+                            <div>
+                                <span class="metric-value" id="final-margin"></span>
+                                <span class="metric-delta" id="margin-delta"></span>
+                            </div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">對美國客戶的最終報價 (美元)</div>
+                            <span class="metric-value" id="final-price"></span>
+                        </div>
+                    </div>
+                    <div class="analysis-chart">
+                         <div id="cost-chart" class="chart-container"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="dashboard-block" id="competition-analysis">
+                <h3>🌍 全球競爭與轉單交叉點</h3>
+                <div class="analysis-container">
+                    <div class="analysis-metrics">
+                         <div id="sweet-spot-alert"></div>
+                    </div>
+                    <div class="analysis-chart">
+                        <div id="competition-chart" class="chart-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2025 駱櫻文. All Rights Reserved. For demonstration purposes only.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const aspInput = document.getElementById('asp');
+            const initialMarginSlider = document.getElementById('initial-margin');
+            const tariffRateSlider = document.getElementById('tariff-rate');
+            const passThroughSlider = document.getElementById('pass-through');
+            const initialMarginValue = document.getElementById('initial-margin-value');
+            const tariffRateValue = document.getElementById('tariff-rate-value');
+            const passThroughValue = document.getElementById('pass-through-value');
+            const finalMarginDisplay = document.getElementById('final-margin');
+            const marginDeltaDisplay = document.getElementById('margin-delta');
+            const finalPriceDisplay = document.getElementById('final-price');
+            const sweetSpotAlert = document.getElementById('sweet-spot-alert');
+            function updateDashboard() {
+                const asp = parseFloat(aspInput.value);
+                const initialMarginPct = parseFloat(initialMarginSlider.value);
+                const tariffPct = parseFloat(tariffRateSlider.value);
+                const passThroughPct = parseFloat(passThroughSlider.value);
+                initialMarginValue.textContent = `${initialMarginPct.toFixed(1)}%`;
+                tariffRateValue.textContent = `${tariffPct.toFixed(1)}%`;
+                passThroughValue.textContent = `${passThroughPct.toFixed(0)}%`;
+                const initialMargin = initialMarginPct / 100;
+                const tariffRate = tariffPct / 100;
+                const passThroughRate = passThroughPct / 100;
+                const tariffCost = asp * tariffRate;
+                const absorbedCost = tariffCost * (1 - passThroughRate);
+                const passedThroughCost = tariffCost * passThroughRate;
+                const erodedMarginPctPoint = (absorbedCost / asp) * 100;
+                const finalMarginPct = initialMarginPct - erodedMarginPctPoint;
+                const finalCustomerPriceTW = asp + passedThroughCost;
+                finalMarginDisplay.textContent = `${finalMarginPct.toFixed(2)}%`;
+                const deltaMargin = finalMarginPct - initialMarginPct;
+                marginDeltaDisplay.textContent = `${deltaMargin.toFixed(2)} 個百分點`;
+                marginDeltaDisplay.className = deltaMargin < 0 ? "metric-delta negative" : "metric-delta positive";
+                finalPriceDisplay.textContent = `$${finalCustomerPriceTW.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                updateCostChart(asp, initialMargin, absorbedCost);
+                updateCompetitionView(finalCustomerPriceTW, asp);
+            }
+            function updateCostChart(asp, initialMargin, absorbedCost) {
+                const originalProfit = asp * initialMargin;
+                const originalCost = asp * (1 - initialMargin);
+                const newProfit = originalProfit - absorbedCost;
+                const categories = ['原始成本', '利潤', '廠商吸收的關稅成本'];
+                const trace1 = {x: categories, y: [originalCost, originalProfit, 0], name: '原始', type: 'bar', marker: { color: '#aec7e8' }};
+                const trace2 = {x: categories, y: [originalCost, newProfit, absorbedCost], name: '關稅後', type: 'bar', marker: { color: '#1f77b4' }};
+                const data = [trace1, trace2];
+                const layout = {barmode: 'group', title: { text: '成本與利潤變化比較', font: {size: 16}}, yaxis: { title: '金額 (美元)', fixedrange: true }, xaxis: {fixedrange: true}, margin: { l: 60, r: 20, t: 40, b: 40 }, legend: { x: 0.75, y: 1.0, orientation: 'h' }};
+                Plotly.react('cost-chart', data, layout, {responsive: true, displayModeBar: false, staticPlot: false});
+            }
+            function updateCompetitionView(priceTW, asp) {
+                const KOREA_TARIFF_RATE = 0.15;
+                const US_ONSHORE_PREMIUM = 0.30;
+                const JAPAN_TARIFF_RATE = 0.15;
+                const JAPAN_ONSHORE_PREMIUM = 0.20;
+                const priceKR = asp * (1 + KOREA_TARIFF_RATE);
+                const priceUS = asp * (1 + US_ONSHORE_PREMIUM);
+                const priceJP = (asp * (1 + JAPAN_ONSHORE_PREMIUM)) * (1 + JAPAN_TARIFF_RATE);
+                const lowestCompetitorPrice = Math.min(priceKR, priceUS, priceJP);
+                let competitorName = "";
+                if (lowestCompetitorPrice === priceKR) competitorName = "韓國";
+                else if (lowestCompetitorPrice === priceUS) competitorName = "美國本土";
+                else competitorName = "日本";
+                if (priceTW > lowestCompetitorPrice) {
+                    if (priceTW > priceUS) {
+                        sweetSpotAlert.className = 'danger';
+                        sweetSpotAlert.innerHTML = `<strong>⚠️ 成本交叉：已高於美國本土</strong>`;
+                    } else {
+                         sweetSpotAlert.className = 'warning';
+                         sweetSpotAlert.innerHTML = `<strong>🟠 注意：成本已高於 ${competitorName}</strong>`;
+                    }
+                } else {
+                    sweetSpotAlert.className = 'good';
+                    sweetSpotAlert.innerHTML = `<strong>✅ 成本優勢顯著</strong>`;
+                }
+                
+                const default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
+                
+                const data = [{
+                    y: ['台灣', '韓國', '日本', '美國本土製造'],
+                    x: [priceTW, priceKR, priceJP, priceUS],
+                    text: [priceTW, priceKR, priceJP, priceUS].map(val => `$${val.toLocaleString('en-US', {maximumFractionDigits:0})}`),
+                    textposition: 'inside', insidetextanchor: 'middle', type: 'bar', orientation: 'h',
+                    marker: { color: default_colors }
+                }];
+
+                const layout = {
+                    title: { text: '最終報價比較', font: {size: 16}},
+                    // X軸標題修改
+                    xaxis: { title: '最終報價 (美元)', fixedrange: true },
+                    yaxis: { automargin: true, fixedrange: true },
+                    margin: { l: 100, r: 20, t: 40, b: 40 }
+                };
+                Plotly.react('competition-chart', data, layout, {responsive: true, displayModeBar: false, staticPlot: false});
+            }
+            const controls = [aspInput, initialMarginSlider, tariffRateSlider, passThroughSlider];
+            controls.forEach(control => { control.addEventListener('input', updateDashboard); });
+            updateDashboard();
+        });
+    </script>
+</body>
+</html>
